@@ -1,0 +1,29 @@
+Integration-branch performance work
+
+Starting revision: 5739fd79bcfc75ba7526773d0cf634521f8aca3c
+
+Change: in readrec's single-character/paragraph separator path, hold the stdio
+stream lock once per record and use getc_unlocked inside that scope. Regex and
+CSV record paths are unchanged. This uses POSIX stdio locking APIs; the change
+has been built/tested on macOS, not validated on Windows or other platforms.
+
+Build:
+  make CC=clang HOSTCC=clang CFLAGS='-O2 -g'
+
+Correctness (requires a separately built, unmodified executable):
+  python3 tools/check_record_locking.py /path/to/original/awk ./a.out
+
+56 cases cover variable field counts, assignments, next, empty/unterminated
+input, large records, paragraph/regex separators and CSV. These checks passed
+on this checkout; they do not replace the complete upstream regression suite.
+
+Prior matched-source measurements of this patch, Apple M2 Ultra / macOS 26.5,
+seven shuffled repeats, ~32 MiB generated warm-cache input, startup included:
+                       original ms     patched ms
+record counting           595.673        109.861
+field aggregation         736.741        255.073
+64 KiB record counting    556.778         78.707
+These are earlier lab measurements of the same source patch, not a new benchmark
+run of this checkout. They are synthetic workloads, not universal speedups.
+Full records and benchmark scripts remain in the parent performance lab:
+../upstream-comparison.sqlite, ../compare_upstream.py, ../UPSTREAM_BASELINE.txt

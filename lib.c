@@ -251,15 +251,17 @@ int readrec(char **pbuf, int *pbufsize, FILE *inf, bool newflag)	/* read one rec
 		isrec = (found == 0 && *buf == '\0') ? false : true;
 
 	} else {
+		/* Amortize stdio locking across the record. */
+		flockfile(inf);
 		if ((sep = *rs) == 0) {
 			sep = '\n';
-			while ((c=getc(inf)) == '\n' && c != EOF)	/* skip leading \n's */
+			while ((c=getc_unlocked(inf)) == '\n' && c != EOF)	/* skip leading \n's */
 				;
 			if (c != EOF)
 				ungetc(c, inf);
 		}
 		for (rr = buf; ; ) {
-			for (; (c=getc(inf)) != sep && c != EOF; ) {
+			for (; (c=getc_unlocked(inf)) != sep && c != EOF; ) {
 				if (rr-buf+1 > bufsize)
 					if (!adjbuf(&buf, &bufsize, 1+rr-buf,
 					    recsize, &rr, "readrec 1"))
@@ -268,7 +270,7 @@ int readrec(char **pbuf, int *pbufsize, FILE *inf, bool newflag)	/* read one rec
 			}
 			if (*rs == sep || c == EOF)
 				break;
-			if ((c = getc(inf)) == '\n' || c == EOF)	/* 2 in a row */
+			if ((c = getc_unlocked(inf)) == '\n' || c == EOF)	/* 2 in a row */
 				break;
 			if (!adjbuf(&buf, &bufsize, 2+rr-buf, recsize, &rr,
 			    "readrec 2"))
@@ -280,6 +282,7 @@ int readrec(char **pbuf, int *pbufsize, FILE *inf, bool newflag)	/* read one rec
 			FATAL("input record `%.30s...' too long", buf);
 		*rr = 0;
 		isrec = (c == EOF && rr == buf) ? false : true;
+		funlockfile(inf);
 	}
 	*pbuf = buf;
 	*pbufsize = bufsize;
